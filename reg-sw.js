@@ -2,6 +2,48 @@ import {AppRegistry} from 'react-native';
 import App from './App';
 import {name as appName} from './app.json';
 
+if (typeof window !== 'undefined') {
+  window.__foodPlanInstallPromptEvent = null;
+
+  const shouldIgnoreExternalScriptError = event => {
+    const message = event?.message || event?.reason?.message || '';
+    const filename = event?.filename || '';
+
+    return (
+      message === 'Script error.' ||
+      message.includes('selectedAddresss') ||
+      filename.startsWith('chrome-extension://') ||
+      filename.startsWith('moz-extension://')
+    );
+  };
+
+  window.addEventListener('error', event => {
+    if (shouldIgnoreExternalScriptError(event)) {
+      event.preventDefault();
+      return false;
+    }
+
+    return undefined;
+  });
+
+  window.addEventListener('unhandledrejection', event => {
+    if (shouldIgnoreExternalScriptError(event)) {
+      event.preventDefault();
+    }
+  });
+
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    window.__foodPlanInstallPromptEvent = event;
+    window.dispatchEvent(new Event('foodplan-install-available'));
+  });
+
+  window.addEventListener('appinstalled', () => {
+    window.__foodPlanInstallPromptEvent = null;
+    window.dispatchEvent(new Event('foodplan-install-complete'));
+  });
+}
+
 AppRegistry.registerComponent(appName, () => App);
 
 const rootTag = document.getElementById('root');

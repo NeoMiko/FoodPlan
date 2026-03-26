@@ -48,6 +48,12 @@ module.exports = (_, argv) => {
     module: {
       rules: [
         {
+          test: /\.m?js$/,
+          resolve: {
+            fullySpecified: false,
+          },
+        },
+        {
           test: /\.[jt]sx?$/,
           include: transpileModules,
           use: {
