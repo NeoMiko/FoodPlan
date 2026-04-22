@@ -73,3 +73,16 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Web build
+dist/
+.webpack/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Netlify
+.netlify/
+netlify/functions/node_modules/

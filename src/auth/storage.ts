@@ -3,9 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   APP_THEME_STORAGE_KEY,
   AUTH_STORAGE_KEY,
-  AUTH_USERS_STORAGE_KEY,
 } from './config';
-import type {AuthSession, StoredAuthUser} from './types';
+import type {AuthSession} from './types';
 
 export async function loadStoredSession(): Promise<AuthSession | null> {
   const raw = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
@@ -28,26 +27,6 @@ export async function persistSession(session: AuthSession) {
 
 export async function clearStoredSession() {
   await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-}
-
-export async function loadStoredUsers(): Promise<StoredAuthUser[]> {
-  const raw = await AsyncStorage.getItem(AUTH_USERS_STORAGE_KEY);
-
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as StoredAuthUser[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    await AsyncStorage.removeItem(AUTH_USERS_STORAGE_KEY);
-    return [];
-  }
-}
-
-export async function persistUsers(users: StoredAuthUser[]) {
-  await AsyncStorage.setItem(AUTH_USERS_STORAGE_KEY, JSON.stringify(users));
 }
 
 export async function loadStoredTheme(): Promise<'light' | 'dark'> {

@@ -1,7 +1,10 @@
 {
   "extends": "@react-native/typescript-config",
   "compilerOptions": {
-    "types": ["jest"]
+    "types": ["jest"],
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "lib": ["esnext", "dom"]
   },
   "include": ["**/*.ts", "**/*.tsx", "src/screens/AuthScreen.js"],
   "exclude": ["**/node_modules", "**/Pods"]
