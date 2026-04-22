@@ -1,4 +1,4 @@
-import {StyleSheet} from 'react-native';
+import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
   safeArea: {
@@ -62,7 +62,7 @@ export const styles = StyleSheet.create({
     maxWidth: 720,
     borderRadius: 30,
     overflow: 'hidden',
-    // @ts-ignore - boxShadow is valid on web, elevation on native
+    // @ts-ignore
     boxShadow: '0px 10px 20px rgba(0,0,0,0.24)',
     elevation: 16,
   },
@@ -194,7 +194,7 @@ export const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1,
     borderColor: '#22323D',
-    // @ts-ignore - boxShadow is valid on web, elevation on native
+    // @ts-ignore
     boxShadow: '0px 12px 24px rgba(0,0,0,0.28)',
     elevation: 8,
   },
@@ -377,9 +377,7 @@ export const dashboardStyles = StyleSheet.create({
   page: {
     flex: 1,
   },
-  tabsScroll: {
-    flexGrow: 0,
-  },
+
   tabsRow: {
     margin: 20,
     marginBottom: 0,
@@ -387,12 +385,14 @@ export const dashboardStyles = StyleSheet.create({
     borderWidth: 1,
     padding: 8,
     gap: 8,
-    alignItems: 'stretch',
-    height: 64,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   tabButton: {
-    width: 148,
-    height: 48,
+    minWidth: 100,
+    flexGrow: 1,
+    height: 44,
     borderRadius: 16,
     paddingHorizontal: 12,
     alignItems: 'center',

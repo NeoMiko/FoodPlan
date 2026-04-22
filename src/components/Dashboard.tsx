@@ -29,7 +29,7 @@ interface DashboardProps {
   onLogout: () => void;
   onMoveToShopping: (productId: string) => Promise<void>;
   onMarkPurchased: (itemId: string) => Promise<void>;
-  onRefresh: () => Promise<void>; 
+  onRefresh: () => Promise<void>;
 }
 
 const tabItems = [
@@ -386,41 +386,36 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <View style={[styles.page, { backgroundColor: theme.page }]}>
-      <ScrollView
-        horizontal
-        style={styles.tabsScroll}
-        showsHorizontalScrollIndicator={false}
+
+      <View
+        style={[
+          styles.tabsRow,
+          { backgroundColor: theme.nav, borderColor: theme.border },
+        ]}
       >
-        <View
-          style={[
-            styles.tabsRow,
-            { backgroundColor: theme.nav, borderColor: theme.border },
-          ]}
-        >
-          {tabItems.map(tab => (
-            <Pressable
-              key={tab}
-              onPress={() => setActiveTab(tab)}
+        {tabItems.map(tab => (
+          <Pressable
+            key={tab}
+            onPress={() => setActiveTab(tab)}
+            style={[
+              styles.tabButton,
+              activeTab === tab && { backgroundColor: theme.navActive },
+            ]}
+          >
+            <Text
               style={[
-                styles.tabButton,
-                activeTab === tab && { backgroundColor: theme.navActive },
+                styles.tabButtonText,
+                {
+                  color:
+                    activeTab === tab ? theme.navActiveText : theme.navText,
+                },
               ]}
             >
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  {
-                    color:
-                      activeTab === tab ? theme.navActiveText : theme.navText,
-                  },
-                ]}
-              >
-                {tab}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
+              {tab}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentInner}
