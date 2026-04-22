@@ -16,7 +16,6 @@ import {
   ShoppingItem,
   HistoryItem,
   DashboardStats,
-  AddProductPayload,
 } from '../auth/types';
 
 interface DashboardProps {
@@ -30,7 +29,7 @@ interface DashboardProps {
   onLogout: () => void;
   onMoveToShopping: (productId: string) => Promise<void>;
   onMarkPurchased: (itemId: string) => Promise<void>;
-  refreshData: () => Promise<void>;
+  onRefresh: () => Promise<void>; 
 }
 
 const tabItems = [
@@ -41,12 +40,6 @@ const tabItems = [
   'Historia',
   'Statystyki',
   'Ustawienia',
-];
-
-const wasteTips = [
-  'Uzyj produktów z krótkim terminem do przygotowania zapiekanki.',
-  'Mleko i jajka przerób na naleśniki, jeśli zbliża się data ważności.',
-  'Zamroź nadmiar owoców i warzyw, zanim stracą świeżość.',
 ];
 
 interface CardProps {
@@ -115,16 +108,15 @@ const Dashboard: React.FC<DashboardProps> = ({
   onLogout,
   onMoveToShopping,
   onMarkPurchased,
-  refreshData,
+  onRefresh,
 }) => {
   const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [searchValue, setSearchValue] = useState('');
-  const [loadingAction, setLoadingAction] = (useState < string) | (null > null);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
   const theme = getTheme(themeMode);
   const isCompact = width < 760;
-  const isNarrow = width < 520;
 
   const expiringSoon = useMemo(() => {
     const today = new Date();
@@ -156,7 +148,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     setLoadingAction(id);
     try {
       await action(id);
-      await refreshData();
+      await onRefresh();
+    } catch (err) {
+      console.error('Action error:', err);
     } finally {
       setLoadingAction(null);
     }
@@ -173,8 +167,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             Witaj, {userName || 'Użytkowniku'}
           </Text>
           <Text style={[styles.heroSubtitle, { color: '#B6C8C7' }]}>
-            Masz {stats.expired_count} produktów po terminie. Wymagają one
-            natychmiastowej uwagi.
+            Masz {stats.expired_count} produktów po terminie.
           </Text>
         </View>
         <View style={[styles.riskBadge, { backgroundColor: theme.accentSoft }]}>
@@ -184,9 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               : 0}
             %
           </Text>
-          <Text style={[styles.riskLabel, { color: theme.muted }]}>
-            ryzyka strat
-          </Text>
+          <Text style={[styles.riskLabel, { color: theme.muted }]}>ryzyka</Text>
         </View>
       </View>
 
@@ -278,7 +269,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           </View>
           <Pressable onPress={() => handleAction(p.id, onMoveToShopping)}>
             <Text style={{ color: theme.accent, fontWeight: '600' }}>
-              Przenieś
+              Na listę
             </Text>
           </Pressable>
         </View>
@@ -350,6 +341,49 @@ const Dashboard: React.FC<DashboardProps> = ({
     </SectionCard>
   );
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'Spizarnia':
+        return renderPantry();
+      case 'Lista zakupow':
+        return renderShopping();
+      case 'Historia':
+        return renderHistory();
+      case 'Ustawienia':
+        return (
+          <SectionCard theme={theme} title="Ustawienia">
+            <View style={styles.settingRow}>
+              <Text style={{ color: theme.text }}>Tryb ciemny</Text>
+              <Switch
+                value={themeMode === 'dark'}
+                onValueChange={v => onThemeChange(v ? 'dark' : 'light')}
+                trackColor={{ false: '#ccc', true: theme.accent }}
+              />
+            </View>
+            <Pressable
+              onPress={onLogout}
+              style={[
+                styles.sectionButton,
+                { marginTop: 20, backgroundColor: theme.dangerSoft },
+              ]}
+            >
+              <Text
+                style={{
+                  color: '#D95C4E',
+                  textAlign: 'center',
+                  fontWeight: 'bold',
+                }}
+              >
+                Wyloguj się
+              </Text>
+            </Pressable>
+          </SectionCard>
+        );
+      default:
+        return renderDashboard();
+    }
+  };
+
   return (
     <View style={[styles.page, { backgroundColor: theme.page }]}>
       <ScrollView
@@ -387,44 +421,11 @@ const Dashboard: React.FC<DashboardProps> = ({
           ))}
         </View>
       </ScrollView>
-
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentInner}
       >
-        {activeTab === 'Spizarnia' && renderPantry()}
-        {activeTab === 'Lista zakupow' && renderShopping()}
-        {activeTab === 'Historia' && renderHistory()}
-        {activeTab === 'Dashboard' && renderDashboard()}
-        {activeTab === 'Ustawienia' && (
-          <SectionCard theme={theme} title="Ustawienia">
-            <View style={styles.settingRow}>
-              <Text style={{ color: theme.text }}>Tryb ciemny</Text>
-              <Switch
-                value={themeMode === 'dark'}
-                onValueChange={v => onThemeChange(v ? 'dark' : 'light')}
-                trackColor={{ false: '#ccc', true: theme.accent }}
-              />
-            </View>
-            <Pressable
-              onPress={onLogout}
-              style={[
-                styles.sectionButton,
-                { marginTop: 20, backgroundColor: theme.dangerSoft },
-              ]}
-            >
-              <Text
-                style={{
-                  color: '#D95C4E',
-                  textAlign: 'center',
-                  fontWeight: 'bold',
-                }}
-              >
-                Wyloguj się
-              </Text>
-            </Pressable>
-          </SectionCard>
-        )}
+        {renderContent()}
       </ScrollView>
     </View>
   );

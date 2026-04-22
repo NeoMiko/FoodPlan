@@ -60,7 +60,6 @@ const features = [
   'Przepisy i składniki zawsze pod ręką',
 ];
 
-
 function computeDaysLeft(expiryDate: string | null): number | null {
   if (!expiryDate) return null;
   const today = new Date();
@@ -69,8 +68,7 @@ function computeDaysLeft(expiryDate: string | null): number | null {
   return Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-
-function processProducts(raw: any[]): Product[] {
+function processProducts(raw: Product[]): Product[] {
   return raw.map(p => ({
     ...p,
     expiryDate: p.expiry_date ?? null,
@@ -99,7 +97,6 @@ export default function App() {
     useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
-  
   const [products, setProducts] = useState<Product[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -112,25 +109,45 @@ export default function App() {
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   const isRegister = screen === 'register';
-  const isCompactLayout = width < 760;
-  const trimmedName = name.trim();
-  const trimmedEmail = email.trim();
   const theme = getTheme(themeMode);
   const isDarkTheme = themeMode === 'dark';
-
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
 
   const loadAppData = async () => {
+    if (!session?.token) return;
+    
     setIsLoadingData(true);
     try {
-      const data = await getDashboardData();
+      const data = await getDashboardData(session.token); 
       setProducts(processProducts(data.products));
       setShoppingList(data.shoppingList);
       setHistory(data.history);
       setDashboardStats(data.stats);
     } catch (error) {
-      console.error('Błąd pobierania danych z bazy:', error);
+      console.error('Błąd pobierania danych:', error);
     } finally {
       setIsLoadingData(false);
+    }
+  };
+
+  const handleMoveToShopping = async (productId: string) => {
+    if (!session?.token) return;
+    try {
+      await moveToShopping(session.token, productId);
+      await loadAppData();
+    } catch (error) {
+      console.error('Błąd przenoszenia do listy:', error);
+    }
+  };
+
+  const handleMarkPurchased = async (itemId: string) => {
+    if (!session?.token) return;
+    try {
+      await markPurchased(session.token, itemId);
+      await loadAppData();
+    } catch (error) {
+      console.error('Błąd oznaczania jako kupione:', error);
     }
   };
 
@@ -141,10 +158,10 @@ export default function App() {
           loadStoredSession(),
           loadStoredTheme(),
         ]);
-        if (storedSession) {
+        
+        if (storedSession?.token) {
           setSession(storedSession);
-          
-          const data = await getDashboardData();
+          const data = await getDashboardData(storedSession.token);
           setProducts(processProducts(data.products));
           setShoppingList(data.shoppingList);
           setHistory(data.history);
@@ -152,16 +169,14 @@ export default function App() {
         }
         setThemeMode(storedTheme);
       } catch (e) {
-        console.log("Błąd bootstrapowania aplikacji");
+        console.log("Błąd startowy aplikacji");
       } finally {
         setIsBootstrapping(false);
       }
     }
-
     bootstrapSession();
   }, []);
 
-  
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const syncInstallPrompt = () => {
@@ -181,10 +196,8 @@ export default function App() {
     const errors: AuthFieldErrors = {};
     if (!trimmedEmail) errors.email = 'Adres e-mail jest wymagany.';
     else if (!emailRegex.test(trimmedEmail)) errors.email = 'Podaj poprawny adres e-mail.';
-    
     if (!password) errors.password = 'Hasło jest wymagane.';
     else if (isRegister && password.length < 8) errors.password = 'Hasło musi mieć min. 8 znaków.';
-
     if (isRegister) {
       if (!trimmedName) errors.name = 'Imię i nazwisko jest wymagane.';
       if (password !== confirmPassword) errors.confirmPassword = 'Hasła muszą być identyczne.';
@@ -218,8 +231,11 @@ export default function App() {
       setSession(nextSession);
       if (staySignedIn || isRegister) await persistSession(nextSession);
       
-     
-      await loadAppData();
+      const data = await getDashboardData(nextSession.token);
+      setProducts(processProducts(data.products));
+      setShoppingList(data.shoppingList);
+      setHistory(data.history);
+      setDashboardStats(data.stats);
       
       setPassword('');
       setConfirmPassword('');
@@ -248,7 +264,6 @@ export default function App() {
     );
   }
 
-  
   if (session) {
     return (
       <SafeAreaView style={[styles.safeArea, {backgroundColor: theme.page}]}>
@@ -258,7 +273,7 @@ export default function App() {
           shoppingList={shoppingList}
           history={history}
           stats={dashboardStats}
-          userName={session.user.name}
+          userName={session.user.name ?? null}
           themeMode={themeMode}
           onThemeChange={async (t) => {
             setThemeMode(t);
@@ -266,12 +281,13 @@ export default function App() {
           }}
           onLogout={handleLogout}
           onRefresh={loadAppData}
+          onMoveToShopping={handleMoveToShopping}
+          onMarkPurchased={handleMarkPurchased}
         />
       </SafeAreaView>
     );
   }
 
-  
   return (
     <SafeAreaView style={[styles.safeArea, {backgroundColor: theme.page}]}>
       <StatusBar barStyle={isDarkTheme ? 'light-content' : 'dark-content'} />
@@ -338,7 +354,11 @@ export default function App() {
               disabled={isPrimaryDisabled}
               onPress={handleSubmit}
               style={[styles.primaryButton, isPrimaryDisabled && styles.primaryButtonDisabled]}>
-              {isSubmitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>{isRegister ? 'Zarejestruj' : 'Zaloguj'}</Text>}
+              {isSubmitting ? (
+                <ActivityIndicator color={isDarkTheme ? '#F7F4EC' : '#FFFFFF'} />
+              ) : (
+                <Text style={styles.primaryButtonText}>{isRegister ? 'Zarejestruj' : 'Zaloguj'}</Text>
+              )}
             </Pressable>
 
             <Pressable onPress={() => {clearErrors(); setScreen(isRegister ? 'login' : 'register');}}>
