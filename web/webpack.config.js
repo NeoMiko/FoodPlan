@@ -2,7 +2,7 @@ const path = require('path');
 const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
-const {GenerateSW} = require('workbox-webpack-plugin');
+const { GenerateSW } = require('workbox-webpack-plugin');
 
 const appDirectory = path.resolve(__dirname, '..');
 
@@ -32,6 +32,10 @@ module.exports = (_, argv) => {
     resolve: {
       alias: {
         'react-native$': 'react-native-web',
+        'expo-camera': path.resolve(
+          __dirname,
+          '../src/mocks/expo-camera.web.ts',
+        ),
       },
       extensions: [
         '.web.tsx',
@@ -114,14 +118,14 @@ module.exports = (_, argv) => {
           navigateFallback: '/index.html',
           runtimeCaching: [
             {
-              urlPattern: ({request}) => request.mode === 'navigate',
+              urlPattern: ({ request }) => request.mode === 'navigate',
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'pages',
               },
             },
             {
-              urlPattern: ({request}) =>
+              urlPattern: ({ request }) =>
                 ['script', 'style', 'worker'].includes(request.destination),
               handler: 'StaleWhileRevalidate',
               options: {
@@ -129,7 +133,7 @@ module.exports = (_, argv) => {
               },
             },
             {
-              urlPattern: ({request}) => request.destination === 'image',
+              urlPattern: ({ request }) => request.destination === 'image',
               handler: 'CacheFirst',
               options: {
                 cacheName: 'images',
