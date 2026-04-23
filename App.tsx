@@ -12,14 +12,14 @@ import {
   View,
 } from 'react-native';
 
-import Dashboard from './src/components/Dashboard';
+import Dashboard, { AddProductForm } from './src/components/Dashboard';
 import {
-  loginWithApi, 
-  registerWithApi, 
-  getDashboardData, 
-  addProduct, 
-  moveToShopping, 
-  markPurchased
+  loginWithApi,
+  registerWithApi,
+  getDashboardData,
+  addProduct,
+  moveToShopping,
+  markPurchased,
 } from './src/auth/api';
 import {
   clearStoredSession,
@@ -116,10 +116,9 @@ export default function App() {
 
   const loadAppData = async () => {
     if (!session?.token) return;
-    
     setIsLoadingData(true);
     try {
-      const data = await getDashboardData(session.token); 
+      const data = await getDashboardData(session.token);
       setProducts(processProducts(data.products));
       setShoppingList(data.shoppingList);
       setHistory(data.history);
@@ -151,6 +150,25 @@ export default function App() {
     }
   };
 
+  const handleAddProduct = async (form: AddProductForm) => {
+    if (!session?.token) return;
+    try {
+      await addProduct(session.token, {
+        name: form.name,
+        emoji: form.emoji,
+        location: form.location,
+        expiryDate: form.expiry_date,
+        quantity: form.quantity,
+        unit: form.unit,
+        notes: form.notes,
+      });
+      await loadAppData();
+    } catch (error) {
+      console.error('Błąd dodawania produktu:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     async function bootstrapSession() {
       try {
@@ -158,7 +176,6 @@ export default function App() {
           loadStoredSession(),
           loadStoredTheme(),
         ]);
-        
         if (storedSession?.token) {
           setSession(storedSession);
           const data = await getDashboardData(storedSession.token);
@@ -169,7 +186,7 @@ export default function App() {
         }
         setThemeMode(storedTheme);
       } catch (e) {
-        console.log("Błąd startowy aplikacji");
+        console.log('Błąd startowy aplikacji');
       } finally {
         setIsBootstrapping(false);
       }
@@ -212,11 +229,15 @@ export default function App() {
   }, [acceptRules, authError, isRegister]);
 
   const visibleErrors = {...clientErrors, ...fieldErrors};
-  const isPrimaryDisabled = isSubmitting || Object.keys(clientErrors).length > 0 || (isRegister && !acceptRules);
+  const isPrimaryDisabled =
+    isSubmitting || Object.keys(clientErrors).length > 0 || (isRegister && !acceptRules);
 
   function clearErrors(field?: keyof AuthFieldErrors) {
     setAuthError('');
-    if (!field) { setFieldErrors({}); return; }
+    if (!field) {
+      setFieldErrors({});
+      return;
+    }
     setFieldErrors(current => ({...current, [field]: undefined}));
   }
 
@@ -230,13 +251,13 @@ export default function App() {
 
       setSession(nextSession);
       if (staySignedIn || isRegister) await persistSession(nextSession);
-      
+
       const data = await getDashboardData(nextSession.token);
       setProducts(processProducts(data.products));
       setShoppingList(data.shoppingList);
       setHistory(data.history);
       setDashboardStats(data.stats);
-      
+
       setPassword('');
       setConfirmPassword('');
     } catch (error) {
@@ -252,7 +273,12 @@ export default function App() {
     setSession(null);
     setProducts([]);
     setShoppingList([]);
-    setDashboardStats({total_products: 0, expired_count: 0, expiring_soon_count: 0, added_this_month: 0});
+    setDashboardStats({
+      total_products: 0,
+      expired_count: 0,
+      expiring_soon_count: 0,
+      added_this_month: 0,
+    });
     await clearStoredSession();
   }
 
@@ -275,7 +301,7 @@ export default function App() {
           stats={dashboardStats}
           userName={session.user.name ?? null}
           themeMode={themeMode}
-          onThemeChange={async (t) => {
+          onThemeChange={async t => {
             setThemeMode(t);
             await persistTheme(t);
           }}
@@ -283,6 +309,7 @@ export default function App() {
           onRefresh={loadAppData}
           onMoveToShopping={handleMoveToShopping}
           onMarkPurchased={handleMarkPurchased}
+          onAddProduct={handleAddProduct}
         />
       </SafeAreaView>
     );
@@ -294,12 +321,17 @@ export default function App() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.screenFrame}>
           <View style={styles.heroPanel}>
-            <View style={styles.brandBadge}><Text style={styles.brandBadgeText}>FOODPLAN</Text></View>
-            <Text style={styles.heroTitle}>{isRegister ? 'Utwórz konto' : 'Witaj ponownie'}</Text>
+            <View style={styles.brandBadge}>
+              <Text style={styles.brandBadgeText}>FOODPLAN</Text>
+            </View>
+            <Text style={styles.heroTitle}>
+              {isRegister ? 'Utwórz konto' : 'Witaj ponownie'}
+            </Text>
             <View style={styles.featureList}>
               {features.map(f => (
                 <View key={f} style={styles.featureRow}>
-                  <View style={styles.featureDot} /><Text style={styles.featureText}>{f}</Text>
+                  <View style={styles.featureDot} />
+                  <Text style={styles.featureText}>{f}</Text>
                 </View>
               ))}
             </View>
@@ -311,7 +343,10 @@ export default function App() {
                 placeholder="Imię i nazwisko"
                 style={[styles.input, !!visibleErrors.name && styles.inputError]}
                 value={name}
-                onChangeText={t => {setName(t); clearErrors('name');}}
+                onChangeText={t => {
+                  setName(t);
+                  clearErrors('name');
+                }}
               />
             )}
             <TextInput
@@ -320,14 +355,20 @@ export default function App() {
               placeholder="Email"
               style={[styles.input, !!visibleErrors.email && styles.inputError]}
               value={email}
-              onChangeText={t => {setEmail(t); clearErrors('email');}}
+              onChangeText={t => {
+                setEmail(t);
+                clearErrors('email');
+              }}
             />
             <TextInput
               secureTextEntry
               placeholder="Hasło"
               style={[styles.input, !!visibleErrors.password && styles.inputError]}
               value={password}
-              onChangeText={t => {setPassword(t); clearErrors('password');}}
+              onChangeText={t => {
+                setPassword(t);
+                clearErrors('password');
+              }}
             />
             {isRegister && (
               <TextInput
@@ -335,20 +376,27 @@ export default function App() {
                 placeholder="Powtórz hasło"
                 style={[styles.input, !!visibleErrors.confirmPassword && styles.inputError]}
                 value={confirmPassword}
-                onChangeText={t => {setConfirmPassword(t); clearErrors('confirmPassword');}}
+                onChangeText={t => {
+                  setConfirmPassword(t);
+                  clearErrors('confirmPassword');
+                }}
               />
             )}
 
             <View style={styles.optionRow}>
-              <Text style={styles.optionTitle}>{isRegister ? 'Akceptuję regulamin' : 'Pozostań zalogowany'}</Text>
+              <Text style={styles.optionTitle}>
+                {isRegister ? 'Akceptuję regulamin' : 'Pozostań zalogowany'}
+              </Text>
               <Switch
                 value={isRegister ? acceptRules : staySignedIn}
-                onValueChange={v => isRegister ? setAcceptRules(v) : setStaySignedIn(v)}
+                onValueChange={v => (isRegister ? setAcceptRules(v) : setStaySignedIn(v))}
                 trackColor={{false: theme.border, true: theme.accent}}
               />
             </View>
 
-            <Text style={[styles.helperText, authError && styles.helperTextError]}>{helperText}</Text>
+            <Text style={[styles.helperText, authError && styles.helperTextError]}>
+              {helperText}
+            </Text>
 
             <Pressable
               disabled={isPrimaryDisabled}
@@ -357,12 +405,20 @@ export default function App() {
               {isSubmitting ? (
                 <ActivityIndicator color={isDarkTheme ? '#F7F4EC' : '#FFFFFF'} />
               ) : (
-                <Text style={styles.primaryButtonText}>{isRegister ? 'Zarejestruj' : 'Zaloguj'}</Text>
+                <Text style={styles.primaryButtonText}>
+                  {isRegister ? 'Zarejestruj' : 'Zaloguj'}
+                </Text>
               )}
             </Pressable>
 
-            <Pressable onPress={() => {clearErrors(); setScreen(isRegister ? 'login' : 'register');}}>
-              <Text style={styles.footerLink}>{isRegister ? 'Masz już konto? Zaloguj' : 'Nie masz konta? Załóż je'}</Text>
+            <Pressable
+              onPress={() => {
+                clearErrors();
+                setScreen(isRegister ? 'login' : 'register');
+              }}>
+              <Text style={styles.footerLink}>
+                {isRegister ? 'Masz już konto? Zaloguj' : 'Nie masz konta? Załóż je'}
+              </Text>
             </Pressable>
           </View>
         </View>
