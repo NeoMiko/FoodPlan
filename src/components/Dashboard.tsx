@@ -214,13 +214,55 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const handleBarcodeScanned = ({ data }: { data: string }) => {
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setCameraActive(false);
     setScannedBarcode(data);
-    setAddForm(prev => ({ ...prev, barcode: data, name: data }));
     setScannerMode('manual');
+  
+    
+    setAddForm(f => ({ ...f, barcode: data }));
+  
+    
+    try {
+      const res = await fetch(
+        `https://world.openfoodfacts.org/api/v0/product/${data}.json`
+      );
+      const json = await res.json();
+  
+      if (json.status === 1 && json.product) {
+        const p = json.product;
+  
+        
+        const category = (p.categories ?? '').toLowerCase();
+        let emoji = '📦';
+        if (category.includes('milk') || category.includes('mleko')) emoji = '🥛';
+        else if (category.includes('meat') || category.includes('mieso')) emoji = '🥩';
+        else if (category.includes('bread') || category.includes('chleb')) emoji = '🍞';
+        else if (category.includes('fruit') || category.includes('owoc')) emoji = '🍎';
+        else if (category.includes('vegetable') || category.includes('warzywo')) emoji = '🥦';
+        else if (category.includes('drink') || category.includes('napoj')) emoji = '🧃';
+        else if (category.includes('cheese') || category.includes('ser')) emoji = '🧀';
+        else if (category.includes('egg') || category.includes('jajko')) emoji = '🥚';
+        else if (category.includes('yogurt') || category.includes('jogurt')) emoji = '🫙';
+        else if (category.includes('fish') || category.includes('ryba')) emoji = '🐟';
+  
+        setAddForm(f => ({
+          ...f,
+          barcode: data,
+          name: p.product_name_pl ?? p.product_name ?? p.abbreviated_product_name ?? data,
+          emoji,
+          unit: p.quantity ? 'szt' : 'szt',
+        }));
+      } else {
+       
+        setAddForm(f => ({ ...f, barcode: data, name: '' }));
+      }
+    } catch {
+    
+      setAddForm(f => ({ ...f, barcode: data }));
+    }
   };
 
   const handleAddProduct = async () => {

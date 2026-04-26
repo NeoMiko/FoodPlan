@@ -318,7 +318,7 @@ export default function App() {
   return (
     <SafeAreaView style={[styles.safeArea, {backgroundColor: theme.page}]}>
       <StatusBar barStyle={isDarkTheme ? 'light-content' : 'dark-content'} />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={{backgroundColor: theme.page}} contentContainerStyle={styles.scrollContent}>
         <View style={styles.screenFrame}>
           <View style={styles.heroPanel}>
             <View style={styles.brandBadge}>
