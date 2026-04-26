@@ -18,6 +18,8 @@ import {
   registerWithApi,
   getDashboardData,
   addProduct,
+  editProduct,
+  deleteProduct,
   moveToShopping,
   markPurchased,
 } from './src/auth/api';
@@ -169,6 +171,36 @@ export default function App() {
     }
   };
 
+  const handleEditProduct = async (productId: string, form: Partial<AddProductForm>) => {
+    if (!session?.token) return;
+    try {
+      await editProduct(session.token, productId, {
+        name: form.name,
+        emoji: form.emoji,
+        location: form.location,
+        expiryDate: form.expiry_date,
+        quantity: form.quantity,
+        unit: form.unit,
+        notes: form.notes,
+      });
+      await loadAppData();
+    } catch (error) {
+      console.error('Błąd edycji produktu:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteProduct = async (productId: string) => {
+    if (!session?.token) return;
+    try {
+      await deleteProduct(session.token, productId);
+      await loadAppData();
+    } catch (error) {
+      console.error('Błąd usuwania produktu:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     async function bootstrapSession() {
       try {
@@ -310,6 +342,8 @@ export default function App() {
           onMoveToShopping={handleMoveToShopping}
           onMarkPurchased={handleMarkPurchased}
           onAddProduct={handleAddProduct}
+          onEditProduct={handleEditProduct}
+          onDeleteProduct={handleDeleteProduct}
         />
       </SafeAreaView>
     );
@@ -318,7 +352,9 @@ export default function App() {
   return (
     <SafeAreaView style={[styles.safeArea, {backgroundColor: theme.page}]}>
       <StatusBar barStyle={isDarkTheme ? 'light-content' : 'dark-content'} />
-      <ScrollView style={{backgroundColor: theme.page}} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={{backgroundColor: theme.page}}
+        contentContainerStyle={styles.scrollContent}>
         <View style={styles.screenFrame}>
           <View style={styles.heroPanel}>
             <View style={styles.brandBadge}>
@@ -343,10 +379,7 @@ export default function App() {
                 placeholder="Imię i nazwisko"
                 style={[styles.input, !!visibleErrors.name && styles.inputError]}
                 value={name}
-                onChangeText={t => {
-                  setName(t);
-                  clearErrors('name');
-                }}
+                onChangeText={t => {setName(t); clearErrors('name');}}
               />
             )}
             <TextInput
@@ -355,20 +388,14 @@ export default function App() {
               placeholder="Email"
               style={[styles.input, !!visibleErrors.email && styles.inputError]}
               value={email}
-              onChangeText={t => {
-                setEmail(t);
-                clearErrors('email');
-              }}
+              onChangeText={t => {setEmail(t); clearErrors('email');}}
             />
             <TextInput
               secureTextEntry
               placeholder="Hasło"
               style={[styles.input, !!visibleErrors.password && styles.inputError]}
               value={password}
-              onChangeText={t => {
-                setPassword(t);
-                clearErrors('password');
-              }}
+              onChangeText={t => {setPassword(t); clearErrors('password');}}
             />
             {isRegister && (
               <TextInput
@@ -376,10 +403,7 @@ export default function App() {
                 placeholder="Powtórz hasło"
                 style={[styles.input, !!visibleErrors.confirmPassword && styles.inputError]}
                 value={confirmPassword}
-                onChangeText={t => {
-                  setConfirmPassword(t);
-                  clearErrors('confirmPassword');
-                }}
+                onChangeText={t => {setConfirmPassword(t); clearErrors('confirmPassword');}}
               />
             )}
 
