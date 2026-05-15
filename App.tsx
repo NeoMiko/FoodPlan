@@ -275,6 +275,18 @@ export default function App() {
     return isRegister ? 'Po rejestracji sesja zostanie zapisana.' : '';
   }, [acceptRules, authError, isRegister]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    document.body.style.backgroundColor = theme.page;
+    document.documentElement.style.backgroundColor = theme.page;
+
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) {
+      themeColor.setAttribute('content', theme.page);
+    }
+  }, [theme.page]);
+
   const visibleErrors = {...clientErrors, ...fieldErrors};
   const isPrimaryDisabled =
     isSubmitting || Object.keys(clientErrors).length > 0 || (isRegister && !acceptRules);

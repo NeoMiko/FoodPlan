@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 export const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    minHeight: '100%',
   },
   scrollContent: {
     flexGrow: 1,
@@ -375,6 +376,7 @@ export const styles = StyleSheet.create({
 export const dashboardStyles = StyleSheet.create({
   page: {
     flex: 1,
+    minHeight: '100%',
   },
   tabsRow: {
     margin: 12,
