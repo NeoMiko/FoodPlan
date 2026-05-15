@@ -8,7 +8,7 @@ import type {
 } from './types';
 
 const API_BASE_URL =
-  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  typeof window !== 'undefined' && window.location?.hostname === 'localhost'
     ? 'http://localhost:8888/.netlify/functions'
     : '/.netlify/functions';
 

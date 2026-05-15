@@ -9,7 +9,6 @@ import {
   useWindowDimensions,
   View,
   Alert,
-  Platform,
 } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import Svg, { Rect, Text as SvgText, G } from 'react-native-svg';
@@ -35,6 +34,8 @@ interface DashboardProps {
   onMarkPurchased: (itemId: string) => Promise<void>;
   onRefresh: () => Promise<void>;
   onAddProduct: (product: AddProductForm) => Promise<void>;
+  onEditProduct: (productId: string, product: Partial<AddProductForm>) => Promise<void>;
+  onDeleteProduct: (productId: string) => Promise<void>;
 }
 
 export type AddProductForm = {
@@ -42,7 +43,7 @@ export type AddProductForm = {
   emoji?: string;
   location?: string;
   expiry_date?: string;
-  quantity: number;
+  quantity: number | '';
   unit?: string;
   notes?: string;
   barcode?: string;
@@ -112,6 +113,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   onMarkPurchased,
   onRefresh,
   onAddProduct,
+  onEditProduct,
+  onDeleteProduct,
 }) => {
   const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -124,9 +127,17 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [scannedBarcode, setScannedBarcode] = useState('');
   const [scannerMode, setScannerMode] = useState<'camera' | 'manual'>('camera');
   const [addForm, setAddForm] = useState<AddProductForm>(EMPTY_FORM);
+  const [addFormError, setAddFormError] = useState('');
   const [addLoading, setAddLoading] = useState(false);
   const [addSuccess, setAddSuccess] = useState(false);
   const scannedRef = useRef(false);
+
+  // Edit state
+  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<AddProductForm>(EMPTY_FORM);
+  const [editFormError, setEditFormError] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
 
   const theme = getTheme(themeMode);
   const isCompact = width < 760;
@@ -163,7 +174,6 @@ const Dashboard: React.FC<DashboardProps> = ({
       : products;
   }, [products, searchValue]);
 
-  // --- Stats calculations ---
   const monthlyPurchases = useMemo(() => {
     const now = new Date();
     const counts: Record<string, number> = {};
@@ -179,7 +189,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       if (key in counts) counts[key]++;
     });
     return Object.entries(counts).map(([key, count]) => {
-      const [year, month] = key.split('-').map(Number);
+      const [_year, month] = key.split('-').map(Number);
       return { label: MONTHS_PL[month], count };
     });
   }, [shoppingList]);
@@ -214,27 +224,88 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  const handleExpandEdit = (p: Product) => {
+    if (expandedProductId === p.id) {
+      setExpandedProductId(null);
+      setEditFormError('');
+      return;
+    }
+    setExpandedProductId(p.id);
+    setEditFormError('');
+    setEditForm({
+      name: p.name ?? '',
+      emoji: p.emoji ?? '',
+      location: p.location ?? '',
+      expiry_date: p.expiry_date ?? '',
+      quantity: p.quantity ?? 1,
+      unit: p.unit ?? 'szt',
+      notes: p.notes ?? '',
+      barcode: '',
+    });
+  };
+
+  const handleSaveEdit = async (productId: string) => {
+    if (!editForm.name.trim()) {
+      setEditFormError('Nazwa produktu jest wymagana.');
+      return;
+    }
+    setEditLoading(true);
+    try {
+      await onEditProduct(productId, {
+        ...editForm,
+        name: editForm.name.trim(),
+        quantity: Number(editForm.quantity) || 1,
+      });
+      await onRefresh();
+      setExpandedProductId(null);
+      setEditFormError('');
+    } catch {
+      Alert.alert('Błąd', 'Nie udało się zapisać zmian.');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDelete = async (productId: string, productName: string) => {
+    Alert.alert(
+      'Usuń produkt',
+      `Czy na pewno chcesz usunąć "${productName}"?`,
+      [
+        { text: 'Anuluj', style: 'cancel' },
+        {
+          text: 'Usuń',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleteLoading(productId);
+            try {
+              await onDeleteProduct(productId);
+              await onRefresh();
+              setExpandedProductId(null);
+            } catch {
+              Alert.alert('Błąd', 'Nie udało się usunąć produktu.');
+            } finally {
+              setDeleteLoading(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setCameraActive(false);
     setScannedBarcode(data);
     setScannerMode('manual');
-  
-    
     setAddForm(f => ({ ...f, barcode: data }));
-  
-    
     try {
       const res = await fetch(
         `https://world.openfoodfacts.org/api/v0/product/${data}.json`
       );
       const json = await res.json();
-  
       if (json.status === 1 && json.product) {
         const p = json.product;
-  
-        
         const category = (p.categories ?? '').toLowerCase();
         let emoji = '📦';
         if (category.includes('milk') || category.includes('mleko')) emoji = '🥛';
@@ -247,46 +318,178 @@ const Dashboard: React.FC<DashboardProps> = ({
         else if (category.includes('egg') || category.includes('jajko')) emoji = '🥚';
         else if (category.includes('yogurt') || category.includes('jogurt')) emoji = '🫙';
         else if (category.includes('fish') || category.includes('ryba')) emoji = '🐟';
-  
         setAddForm(f => ({
           ...f,
           barcode: data,
           name: p.product_name_pl ?? p.product_name ?? p.abbreviated_product_name ?? data,
           emoji,
-          unit: p.quantity ? 'szt' : 'szt',
+          unit: 'szt',
         }));
       } else {
-       
         setAddForm(f => ({ ...f, barcode: data, name: '' }));
       }
     } catch {
-    
       setAddForm(f => ({ ...f, barcode: data }));
     }
   };
 
   const handleAddProduct = async () => {
     if (!addForm.name.trim()) {
-      Alert.alert('Błąd', 'Nazwa produktu jest wymagana.');
+      setAddFormError('Nazwa produktu jest wymagana.');
       return;
     }
     setAddLoading(true);
     try {
-      await onAddProduct(addForm);
+      await onAddProduct({
+        ...addForm,
+        name: addForm.name.trim(),
+        quantity: Number(addForm.quantity) || 1,
+      });
       await onRefresh();
       setAddForm(EMPTY_FORM);
+      setAddFormError('');
       setScannedBarcode('');
       scannedRef.current = false;
       setAddSuccess(true);
       setTimeout(() => setAddSuccess(false), 2500);
-    } catch (err) {
+    } catch {
       Alert.alert('Błąd', 'Nie udało się dodać produktu.');
     } finally {
       setAddLoading(false);
     }
   };
 
-  // --- Render helpers ---
+  const renderEditForm = (p: Product) => (
+    <View style={{
+      marginTop: 10,
+      padding: 14,
+      backgroundColor: theme.input,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.border,
+      gap: 8,
+    }}>
+     
+      <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>NAZWA</Text>
+      <TextInput
+        value={editForm.name}
+        onChangeText={v => {
+          setEditForm(f => ({ ...f, name: v }));
+          if (editFormError) setEditFormError('');
+        }}
+        placeholder="Nazwa produktu"
+        placeholderTextColor={theme.muted}
+        style={[styles.searchInput, { backgroundColor: theme.card, color: theme.text, borderColor: editFormError ? '#D95C4E' : theme.border, marginBottom: 4 }]}
+      />
+      {editFormError !== '' && (
+        <Text style={{ color: '#D95C4E', fontSize: 12, fontWeight: '700', marginTop: -4, marginBottom: 6 }}>
+          {editFormError}
+        </Text>
+      )}
+
+      
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>EMOJI</Text>
+          <TextInput
+            value={editForm.emoji}
+            onChangeText={v => setEditForm(f => ({ ...f, emoji: v }))}
+            placeholder="📦"
+            placeholderTextColor={theme.muted}
+            style={[styles.searchInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, marginBottom: 4 }]}
+          />
+        </View>
+        <View style={{ flex: 2 }}>
+          <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>LOKALIZACJA</Text>
+          <TextInput
+            value={editForm.location}
+            onChangeText={v => setEditForm(f => ({ ...f, location: v }))}
+            placeholder="np. Lodówka"
+            placeholderTextColor={theme.muted}
+            style={[styles.searchInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, marginBottom: 4 }]}
+          />
+        </View>
+      </View>
+
+     
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>ILOŚĆ</Text>
+          <TextInput
+            value={String(editForm.quantity)}
+            onChangeText={v => setEditForm(f => ({ ...f, quantity: v.trim() === '' ? '' : Number(v.replace(',', '.')) || f.quantity }))}
+            keyboardType="numeric"
+            placeholderTextColor={theme.muted}
+            style={[styles.searchInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, marginBottom: 4 }]}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>JEDNOSTKA</Text>
+          <TextInput
+            value={editForm.unit}
+            onChangeText={v => setEditForm(f => ({ ...f, unit: v }))}
+            placeholder="szt"
+            placeholderTextColor={theme.muted}
+            style={[styles.searchInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, marginBottom: 4 }]}
+          />
+        </View>
+      </View>
+
+      
+      <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>DATA WAŻNOŚCI (YYYY-MM-DD)</Text>
+      <TextInput
+        value={editForm.expiry_date}
+        onChangeText={v => setEditForm(f => ({ ...f, expiry_date: v }))}
+        placeholder="2025-12-31"
+        placeholderTextColor={theme.muted}
+        style={[styles.searchInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, marginBottom: 4 }]}
+      />
+
+      
+      <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>NOTATKI</Text>
+      <TextInput
+        value={editForm.notes}
+        onChangeText={v => setEditForm(f => ({ ...f, notes: v }))}
+        placeholder="Opcjonalne..."
+        placeholderTextColor={theme.muted}
+        multiline
+        numberOfLines={2}
+        style={[styles.searchInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, minHeight: 52, marginBottom: 4 }]}
+      />
+
+      
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+        <Pressable
+          onPress={() => handleSaveEdit(p.id)}
+          disabled={editLoading}
+          style={[styles.sectionButton, { flex: 2, backgroundColor: theme.accent, marginTop: 0, opacity: editLoading ? 0.6 : 1 }]}
+        >
+          {editLoading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>Zapisz</Text>
+          )}
+        </Pressable>
+        <Pressable
+          onPress={() => handleDelete(p.id, p.name)}
+          disabled={deleteLoading === p.id}
+          style={[styles.sectionButton, { flex: 1, backgroundColor: theme.dangerSoft, marginTop: 0 }]}
+        >
+          {deleteLoading === p.id ? (
+            <ActivityIndicator color="#D95C4E" size="small" />
+          ) : (
+            <Text style={{ color: '#D95C4E', fontWeight: '800', fontSize: 13 }}>Usuń</Text>
+          )}
+        </Pressable>
+        <Pressable
+          onPress={() => setExpandedProductId(null)}
+          style={[styles.sectionButton, { flex: 1, backgroundColor: theme.border, marginTop: 0 }]}
+        >
+          <Text style={{ color: theme.muted, fontWeight: '700', fontSize: 13 }}>Anuluj</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 
   const renderDashboard = () => (
     <>
@@ -322,9 +525,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <View key={p.id} style={[styles.rowCard, { borderBottomColor: theme.border }]}>
             <View>
               <Text style={[styles.rowTitle, { color: theme.text }]}>{p.name}</Text>
-              <Text style={[styles.rowMeta, { color: theme.muted }]}>
-                {p.location} • {p.expiry_date}
-              </Text>
+              <Text style={[styles.rowMeta, { color: theme.muted }]}>{p.location} • {p.expiry_date}</Text>
             </View>
             <Pressable
               onPress={() => handleAction(p.id, onMoveToShopping)}
@@ -351,19 +552,49 @@ const Dashboard: React.FC<DashboardProps> = ({
         <Text style={{ color: theme.muted, paddingVertical: 8 }}>Brak produktów.</Text>
       )}
       {filteredProducts.map(p => (
-        <View key={p.id} style={[styles.rowCard, { borderBottomColor: theme.border }]}>
-          <View style={styles.rowPrimary}>
-            <Text style={styles.rowEmoji}>{p.emoji || '📦'}</Text>
-            <View>
-              <Text style={[styles.rowTitle, { color: theme.text }]}>{p.name}</Text>
-              <Text style={[styles.rowMeta, { color: theme.muted }]}>
-                {p.quantity} {p.unit} • {p.location}
-              </Text>
+        <View key={p.id} style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
+         
+          <View style={[styles.rowCard, { borderBottomWidth: 0 }]}>
+            <View style={styles.rowPrimary}>
+              <Text style={styles.rowEmoji}>{p.emoji || '📦'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowTitle, { color: theme.text }]}>{p.name}</Text>
+                <Text style={[styles.rowMeta, { color: theme.muted }]}>
+                  {p.quantity} {p.unit} • {p.location}
+                  {p.expiry_date ? ` • ${p.expiry_date}` : ''}
+                </Text>
+              </View>
+            </View>
+           
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <Pressable
+                onPress={() => handleExpandEdit(p)}
+                style={[styles.smallAction, {
+                  backgroundColor: expandedProductId === p.id ? theme.accent : theme.accentSoft,
+                }]}
+              >
+                <Text style={{ color: expandedProductId === p.id ? '#fff' : theme.accent, fontSize: 12, fontWeight: '700' }}>
+                  {expandedProductId === p.id ? '✕' : '✏️'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => handleDelete(p.id, p.name)}
+                disabled={deleteLoading === p.id}
+                style={[styles.smallAction, { backgroundColor: theme.dangerSoft }]}
+              >
+                {deleteLoading === p.id ? (
+                  <ActivityIndicator color="#D95C4E" size="small" />
+                ) : (
+                  <Text style={{ color: '#D95C4E', fontWeight: '700', fontSize: 12 }}>Usuń</Text>
+                )}
+              </Pressable>
+              <Pressable onPress={() => handleAction(p.id, onMoveToShopping)}>
+                <Text style={{ color: theme.accent, fontWeight: '600', fontSize: 13 }}>Na listę</Text>
+              </Pressable>
             </View>
           </View>
-          <Pressable onPress={() => handleAction(p.id, onMoveToShopping)}>
-            <Text style={{ color: theme.accent, fontWeight: '600' }}>Na listę</Text>
-          </Pressable>
+         
+          {expandedProductId === p.id && renderEditForm(p)}
         </View>
       ))}
     </SectionCard>
@@ -372,33 +603,21 @@ const Dashboard: React.FC<DashboardProps> = ({
   const renderScanner = () => (
     <>
       <SectionCard theme={theme} title="Skaner produktów" subtitle="Zeskanuj kod lub wpisz ręcznie.">
-        
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
           <Pressable
             onPress={() => { setScannerMode('camera'); scannedRef.current = false; setCameraActive(false); }}
-            style={[
-              styles.smallAction,
-              { backgroundColor: scannerMode === 'camera' ? theme.accent : theme.input, flex: 1, alignItems: 'center' },
-            ]}
+            style={[styles.smallAction, { backgroundColor: scannerMode === 'camera' ? theme.accent : theme.input, flex: 1, alignItems: 'center' }]}
           >
-            <Text style={{ color: scannerMode === 'camera' ? '#fff' : theme.text, fontWeight: '700' }}>
-              📷 Kamera
-            </Text>
+            <Text style={{ color: scannerMode === 'camera' ? '#fff' : theme.text, fontWeight: '700' }}>📷 Kamera</Text>
           </Pressable>
           <Pressable
             onPress={() => { setScannerMode('manual'); setCameraActive(false); }}
-            style={[
-              styles.smallAction,
-              { backgroundColor: scannerMode === 'manual' ? theme.accent : theme.input, flex: 1, alignItems: 'center' },
-            ]}
+            style={[styles.smallAction, { backgroundColor: scannerMode === 'manual' ? theme.accent : theme.input, flex: 1, alignItems: 'center' }]}
           >
-            <Text style={{ color: scannerMode === 'manual' ? '#fff' : theme.text, fontWeight: '700' }}>
-              ✏️ Ręcznie
-            </Text>
+            <Text style={{ color: scannerMode === 'manual' ? '#fff' : theme.text, fontWeight: '700' }}>✏️ Ręcznie</Text>
           </Pressable>
         </View>
 
-        
         {scannerMode === 'camera' && (
           <View style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 16 }}>
             {hasCameraPermission === null && (
@@ -420,9 +639,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 onPress={() => { scannedRef.current = false; setCameraActive(true); }}
                 style={[styles.sectionButton, { backgroundColor: theme.accentSoft, marginTop: 0 }]}
               >
-                <Text style={{ color: theme.accent, fontWeight: '800', fontSize: 15 }}>
-                  Uruchom skaner
-                </Text>
+                <Text style={{ color: theme.accent, fontWeight: '800', fontSize: 15 }}>Uruchom skaner</Text>
               </Pressable>
             )}
             {hasCameraPermission === true && cameraActive && (
@@ -453,27 +670,28 @@ const Dashboard: React.FC<DashboardProps> = ({
         )}
       </SectionCard>
 
-      
       <SectionCard theme={theme} title="Dodaj produkt" subtitle="Uzupełnij dane i zapisz.">
         {addSuccess && (
           <View style={{ backgroundColor: theme.accentSoft, borderRadius: 12, padding: 10, marginBottom: 12 }}>
             <Text style={{ color: theme.accent, fontWeight: '700' }}>✓ Produkt dodany pomyślnie!</Text>
           </View>
         )}
-
-     
-        <Text style={{ fontSize: 13, fontWeight: '700', marginBottom: 4, color: theme.text }}>
-           Nazwa *
-        </Text>
+        <Text style={{ fontSize: 13, fontWeight: '700', marginBottom: 4, color: theme.text }}>Nazwa *</Text>
         <TextInput
           value={addForm.name}
-          onChangeText={v => setAddForm(f => ({ ...f, name: v }))}
+          onChangeText={v => {
+            setAddForm(f => ({ ...f, name: v }));
+            if (addFormError) setAddFormError('');
+          }}
           placeholder="np. Mleko"
           placeholderTextColor={theme.muted}
-          style={[styles.searchInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border }]}
+          style={[styles.searchInput, { backgroundColor: theme.input, color: theme.text, borderColor: addFormError ? '#D95C4E' : theme.border }]}
         />
-
-        
+        {addFormError !== '' && (
+          <Text style={{ color: '#D95C4E', fontSize: 12, fontWeight: '700', marginTop: -8, marginBottom: 10 }}>
+            {addFormError}
+          </Text>
+        )}
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <View style={{ flex: 1 }}>
             <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Emoji</Text>
@@ -496,14 +714,12 @@ const Dashboard: React.FC<DashboardProps> = ({
             />
           </View>
         </View>
-
-        
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <View style={{ flex: 1 }}>
             <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Ilość</Text>
             <TextInput
               value={String(addForm.quantity)}
-              onChangeText={v => setAddForm(f => ({ ...f, quantity: Number(v) || 1 }))}
+              onChangeText={v => setAddForm(f => ({ ...f, quantity: v.trim() === '' ? '' : Number(v.replace(',', '.')) || f.quantity }))}
               keyboardType="numeric"
               placeholderTextColor={theme.muted}
               style={[styles.searchInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border }]}
@@ -520,8 +736,6 @@ const Dashboard: React.FC<DashboardProps> = ({
             />
           </View>
         </View>
-
-        
         <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700', marginBottom: 4 }}>
           Data ważności (YYYY-MM-DD)
         </Text>
@@ -532,8 +746,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           placeholderTextColor={theme.muted}
           style={[styles.searchInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border }]}
         />
-
-        
         <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Notatki</Text>
         <TextInput
           value={addForm.notes}
@@ -542,27 +754,17 @@ const Dashboard: React.FC<DashboardProps> = ({
           placeholderTextColor={theme.muted}
           multiline
           numberOfLines={2}
-          style={[
-            styles.searchInput,
-            { backgroundColor: theme.input, color: theme.text, borderColor: theme.border, minHeight: 60 },
-          ]}
+          style={[styles.searchInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border, minHeight: 60 }]}
         />
-
-       
         <Pressable
           onPress={handleAddProduct}
           disabled={addLoading}
-          style={[
-            styles.sectionButton,
-            { backgroundColor: theme.accent, marginTop: 8, opacity: addLoading ? 0.6 : 1 },
-          ]}
+          style={[styles.sectionButton, { backgroundColor: theme.accent, marginTop: 8, opacity: addLoading ? 0.6 : 1 }]}
         >
           {addLoading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
-              + Dodaj produkt
-            </Text>
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>+ Dodaj produkt</Text>
           )}
         </Pressable>
       </SectionCard>
@@ -579,9 +781,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           key={item.id}
           style={[styles.rowCard, { borderBottomColor: theme.border, opacity: item.is_purchased ? 0.5 : 1 }]}
         >
-          <Text
-            style={[styles.rowTitle, { color: theme.text, textDecorationLine: item.is_purchased ? 'line-through' : 'none' }]}
-          >
+          <Text style={[styles.rowTitle, { color: theme.text, textDecorationLine: item.is_purchased ? 'line-through' : 'none' }]}>
             {item.item_name} ({item.quantity} {item.unit})
           </Text>
           {!item.is_purchased && (
@@ -626,10 +826,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     const barAreaWidth = chartWidth - 40;
     const maxCount = Math.max(...monthlyPurchases.map(m => m.count), 1);
     const barWidth = Math.floor(barAreaWidth / monthlyPurchases.length) - 6;
-
     return (
       <>
-        
         <SectionCard theme={theme} title="Zakupy miesięcznie" subtitle="Ostatnie 6 miesięcy.">
           {monthlyPurchases.every(m => m.count === 0) ? (
             <Text style={{ color: theme.muted, paddingVertical: 8 }}>Brak danych zakupowych.</Text>
@@ -641,35 +839,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                 const y = chartHeight - barH;
                 return (
                   <G key={i}>
-                    <Rect
-                      x={x}
-                      y={y}
-                      width={barWidth}
-                      height={barH}
-                      rx={6}
-                      fill={theme.accent}
-                      opacity={0.85}
-                    />
-                    <SvgText
-                      x={x + barWidth / 2}
-                      y={chartHeight + 16}
-                      fontSize={11}
-                      fill={theme.muted}
-                      textAnchor="middle"
-                    >
-                      {m.label}
-                    </SvgText>
+                    <Rect x={x} y={y} width={barWidth} height={barH} rx={6} fill={theme.accent} opacity={0.85} />
+                    <SvgText x={x + barWidth / 2} y={chartHeight + 16} fontSize={11} fill={theme.muted} textAnchor="middle">{m.label}</SvgText>
                     {m.count > 0 && (
-                      <SvgText
-                        x={x + barWidth / 2}
-                        y={y - 4}
-                        fontSize={11}
-                        fill={theme.text}
-                        textAnchor="middle"
-                        fontWeight="bold"
-                      >
-                        {m.count}
-                      </SvgText>
+                      <SvgText x={x + barWidth / 2} y={y - 4} fontSize={11} fill={theme.text} textAnchor="middle" fontWeight="bold">{m.count}</SvgText>
                     )}
                   </G>
                 );
@@ -677,28 +850,14 @@ const Dashboard: React.FC<DashboardProps> = ({
             </Svg>
           )}
         </SectionCard>
-
-        
         <SectionCard theme={theme} title="Śledzenie strat" subtitle="Produkty po terminie ważności.">
           <View style={[styles.statsGrid, isCompact && styles.stackGrid, { marginBottom: 16 }]}>
             <StatCard theme={theme} label="Przeterminowane" value={wasteStats.total} accent="#D95C4E" />
-            <StatCard
-              theme={theme}
-              label="% spizarni"
-              value={
-                products.length > 0
-                  ? `${Math.round((wasteStats.total / products.length) * 100)}%`
-                  : '0%'
-              }
-              accent="#E7A53B"
-            />
+            <StatCard theme={theme} label="% spizarni" value={products.length > 0 ? `${Math.round((wasteStats.total / products.length) * 100)}%` : '0%'} accent="#E7A53B" />
           </View>
-
           {wasteStats.byLocation.length > 0 && (
             <>
-              <Text style={{ color: theme.muted, fontSize: 13, marginBottom: 8 }}>
-                Straty według lokalizacji:
-              </Text>
+              <Text style={{ color: theme.muted, fontSize: 13, marginBottom: 8 }}>Straty według lokalizacji:</Text>
               {wasteStats.byLocation.map(([loc, count]) => {
                 const pct = wasteStats.total > 0 ? Math.round((count / wasteStats.total) * 100) : 0;
                 return (
@@ -708,49 +867,31 @@ const Dashboard: React.FC<DashboardProps> = ({
                       <Text style={{ color: theme.muted, fontSize: 13 }}>{count} szt ({pct}%)</Text>
                     </View>
                     <View style={{ height: 6, backgroundColor: theme.border, borderRadius: 999 }}>
-                      <View
-                        style={{
-                          height: 6,
-                          width: `${pct}%`,
-                          backgroundColor: '#D95C4E',
-                          borderRadius: 999,
-                        }}
-                      />
+                      <View style={{ height: 6, width: `${pct}%`, backgroundColor: '#D95C4E', borderRadius: 999 }} />
                     </View>
                   </View>
                 );
               })}
             </>
           )}
-
           {wasteStats.expiredProducts.length > 0 && (
             <>
-              <Text style={{ color: theme.muted, fontSize: 13, marginTop: 16, marginBottom: 8 }}>
-                Przeterminowane produkty:
-              </Text>
+              <Text style={{ color: theme.muted, fontSize: 13, marginTop: 16, marginBottom: 8 }}>Przeterminowane produkty:</Text>
               {wasteStats.expiredProducts.map(p => (
                 <View key={p.id} style={[styles.rowCard, { borderBottomColor: theme.border }]}>
                   <View>
                     <Text style={[styles.rowTitle, { color: theme.text }]}>{p.emoji || '📦'} {p.name}</Text>
-                    <Text style={[styles.rowMeta, { color: '#D95C4E' }]}>
-                      Wygasło: {p.expiry_date} • {p.location}
-                    </Text>
+                    <Text style={[styles.rowMeta, { color: '#D95C4E' }]}>Wygasło: {p.expiry_date} • {p.location}</Text>
                   </View>
-                  <Pressable
-                    onPress={() => handleAction(p.id, onMoveToShopping)}
-                    style={[styles.smallAction, { backgroundColor: theme.dangerSoft }]}
-                  >
+                  <Pressable onPress={() => handleAction(p.id, onMoveToShopping)} style={[styles.smallAction, { backgroundColor: theme.dangerSoft }]}>
                     <Text style={{ color: '#D95C4E', fontSize: 12 }}>Na listę</Text>
                   </Pressable>
                 </View>
               ))}
             </>
           )}
-
           {wasteStats.total === 0 && (
-            <Text style={{ color: theme.accent, paddingVertical: 8, fontWeight: '700' }}>
-              ✓ Brak przeterminowanych produktów!
-            </Text>
+            <Text style={{ color: theme.accent, paddingVertical: 8, fontWeight: '700' }}>✓ Brak przeterminowanych produktów!</Text>
           )}
         </SectionCard>
       </>
@@ -759,16 +900,11 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'Spizarnia':
-        return renderPantry();
-      case 'Skaner':
-        return renderScanner();
-      case 'Lista zakupow':
-        return renderShopping();
-      case 'Historia':
-        return renderHistory();
-      case 'Statystyki':
-        return renderStatystyki();
+      case 'Spizarnia': return renderPantry();
+      case 'Skaner': return renderScanner();
+      case 'Lista zakupow': return renderShopping();
+      case 'Historia': return renderHistory();
+      case 'Statystyki': return renderStatystyki();
       case 'Ustawienia':
         return (
           <SectionCard theme={theme} title="Ustawienia">
@@ -780,18 +916,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                 trackColor={{ false: '#ccc', true: theme.accent }}
               />
             </View>
-            <Pressable
-              onPress={onLogout}
-              style={[styles.sectionButton, { marginTop: 20, backgroundColor: theme.dangerSoft }]}
-            >
-              <Text style={{ color: '#D95C4E', textAlign: 'center', fontWeight: 'bold' }}>
-                Wyloguj się
-              </Text>
+            <Pressable onPress={onLogout} style={[styles.sectionButton, { marginTop: 20, backgroundColor: theme.dangerSoft }]}>
+              <Text style={{ color: '#D95C4E', textAlign: 'center', fontWeight: 'bold' }}>Wyloguj się</Text>
             </Pressable>
           </SectionCard>
         );
-      default:
-        return renderDashboard();
+      default: return renderDashboard();
     }
   };
 
@@ -804,12 +934,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             onPress={() => setActiveTab(tab)}
             style={[styles.tabButton, activeTab === tab && { backgroundColor: theme.navActive }]}
           >
-            <Text
-              style={[
-                styles.tabButtonText,
-                { color: activeTab === tab ? theme.navActiveText : theme.navText },
-              ]}
-            >
+            <Text style={[styles.tabButtonText, { color: activeTab === tab ? theme.navActiveText : theme.navText }]}>
               {tab}
             </Text>
           </Pressable>

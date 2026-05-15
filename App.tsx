@@ -8,7 +8,6 @@ import {
   Switch,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -31,12 +30,10 @@ import {
   persistSession,
 } from './src/auth/storage';
 import type {
-  AddProductPayload,
   AuthApiError,
   AuthFieldErrors,
   AuthScreen,
   AuthSession,
-  DashboardData,
   Product,
   ShoppingItem,
   HistoryItem,
@@ -81,7 +78,6 @@ function processProducts(raw: Product[]): Product[] {
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function App() {
-  const {width} = useWindowDimensions();
   const [screen, setScreen] = useState<AuthScreen>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -95,9 +91,9 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<AuthFieldErrors>({});
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
-  const [installPromptEvent, setInstallPromptEvent] =
+  const [_installPromptEvent, setInstallPromptEvent] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [_showInstallPrompt, setShowInstallPrompt] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
@@ -108,13 +104,23 @@ export default function App() {
     expiring_soon_count: 0,
     added_this_month: 0,
   });
-  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [_isLoadingData, setIsLoadingData] = useState(false);
 
   const isRegister = screen === 'register';
   const theme = getTheme(themeMode);
   const isDarkTheme = themeMode === 'dark';
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
+  const authErrorColor = isDarkTheme ? '#FFB4A7' : '#A63A2E';
+  const authInputStyle = (hasError?: boolean) => [
+    styles.input,
+    {
+      backgroundColor: isDarkTheme ? theme.input : '#FFFFFF',
+      borderColor: hasError ? authErrorColor : theme.border,
+      color: theme.text,
+    },
+  ];
+  const authPlaceholderColor = theme.muted;
 
   const loadAppData = async () => {
     if (!session?.token) return;
@@ -160,7 +166,7 @@ export default function App() {
         emoji: form.emoji,
         location: form.location,
         expiryDate: form.expiry_date,
-        quantity: form.quantity,
+        quantity: Number(form.quantity) || 1,
         unit: form.unit,
         notes: form.notes,
       });
@@ -179,7 +185,7 @@ export default function App() {
         emoji: form.emoji,
         location: form.location,
         expiryDate: form.expiry_date,
-        quantity: form.quantity,
+        quantity: Number(form.quantity) || 1,
         unit: form.unit,
         notes: form.notes,
       });
@@ -217,7 +223,7 @@ export default function App() {
           setDashboardStats(data.stats);
         }
         setThemeMode(storedTheme);
-      } catch (e) {
+      } catch {
         console.log('Błąd startowy aplikacji');
       } finally {
         setIsBootstrapping(false);
@@ -227,7 +233,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
+    if (
+      typeof window === 'undefined' ||
+      typeof window.addEventListener !== 'function' ||
+      typeof window.removeEventListener !== 'function'
+    ) {
+      return undefined;
+    }
     const syncInstallPrompt = () => {
       const deferredPrompt = window.__foodPlanInstallPromptEvent ?? null;
       setInstallPromptEvent(deferredPrompt);
@@ -247,6 +259,9 @@ export default function App() {
     else if (!emailRegex.test(trimmedEmail)) errors.email = 'Podaj poprawny adres e-mail.';
     if (!password) errors.password = 'Hasło jest wymagane.';
     else if (isRegister && password.length < 8) errors.password = 'Hasło musi mieć min. 8 znaków.';
+    else if (isRegister && !/[a-z]/.test(password)) errors.password = 'Hasło musi zawierać małą literę.';
+    else if (isRegister && !/[A-Z]/.test(password)) errors.password = 'Hasło musi zawierać wielką literę.';
+    else if (isRegister && !/[0-9]/.test(password)) errors.password = 'Hasło musi zawierać cyfrę.';
     if (isRegister) {
       if (!trimmedName) errors.name = 'Imię i nazwisko jest wymagane.';
       if (password !== confirmPassword) errors.confirmPassword = 'Hasła muszą być identyczne.';
@@ -263,6 +278,15 @@ export default function App() {
   const visibleErrors = {...clientErrors, ...fieldErrors};
   const isPrimaryDisabled =
     isSubmitting || Object.keys(clientErrors).length > 0 || (isRegister && !acceptRules);
+
+  function renderFieldError(field: keyof AuthFieldErrors) {
+    if (!visibleErrors[field]) return null;
+    return (
+      <Text style={[styles.fieldErrorText, {color: authErrorColor}]}>
+        {visibleErrors[field]}
+      </Text>
+    );
+  }
 
   function clearErrors(field?: keyof AuthFieldErrors) {
     setAuthError('');
@@ -356,59 +380,91 @@ export default function App() {
         style={{backgroundColor: theme.page}}
         contentContainerStyle={styles.scrollContent}>
         <View style={styles.screenFrame}>
-          <View style={styles.heroPanel}>
-            <View style={styles.brandBadge}>
-              <Text style={styles.brandBadgeText}>FOODPLAN</Text>
+          <View
+            style={[
+              styles.heroPanel,
+              {backgroundColor: theme.hero, borderColor: theme.border},
+            ]}>
+            <View
+              style={[
+                styles.brandBadge,
+                {backgroundColor: isDarkTheme ? '#1E322B' : theme.accentSoft},
+              ]}>
+              <Text style={[styles.brandBadgeText, {color: theme.accent}]}>FOODPLAN</Text>
             </View>
-            <Text style={styles.heroTitle}>
+            <Text style={[styles.heroTitle, {color: theme.heroText}]}>
               {isRegister ? 'Utwórz konto' : 'Witaj ponownie'}
             </Text>
-            <View style={styles.featureList}>
+            <View
+              style={[
+                styles.featureList,
+                {backgroundColor: isDarkTheme ? '#0F1920' : 'rgba(255,255,255,0.08)'},
+              ]}>
               {features.map(f => (
                 <View key={f} style={styles.featureRow}>
-                  <View style={styles.featureDot} />
-                  <Text style={styles.featureText}>{f}</Text>
+                  <View style={[styles.featureDot, {backgroundColor: theme.accent}]} />
+                  <Text style={[styles.featureText, {color: isDarkTheme ? '#D7E0E8' : '#E5ECEA'}]}>{f}</Text>
                 </View>
               ))}
             </View>
           </View>
 
-          <View style={styles.formPanel}>
+          <View
+            style={[
+              styles.formPanel,
+              {backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1},
+            ]}>
             {isRegister && (
-              <TextInput
-                placeholder="Imię i nazwisko"
-                style={[styles.input, !!visibleErrors.name && styles.inputError]}
-                value={name}
-                onChangeText={t => {setName(t); clearErrors('name');}}
-              />
+              <View style={styles.fieldBlock}>
+                <TextInput
+                  placeholder="Imię i nazwisko"
+                  placeholderTextColor={authPlaceholderColor}
+                  style={authInputStyle(!!visibleErrors.name)}
+                  value={name}
+                  onChangeText={t => {setName(t); clearErrors('name');}}
+                />
+                {renderFieldError('name')}
+              </View>
             )}
-            <TextInput
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholder="Email"
-              style={[styles.input, !!visibleErrors.email && styles.inputError]}
-              value={email}
-              onChangeText={t => {setEmail(t); clearErrors('email');}}
-            />
-            <TextInput
-              secureTextEntry
-              placeholder="Hasło"
-              style={[styles.input, !!visibleErrors.password && styles.inputError]}
-              value={password}
-              onChangeText={t => {setPassword(t); clearErrors('password');}}
-            />
-            {isRegister && (
+            <View style={styles.fieldBlock}>
+              <TextInput
+                autoCapitalize="none"
+                keyboardType="email-address"
+                placeholder="Email"
+                placeholderTextColor={authPlaceholderColor}
+                style={authInputStyle(!!visibleErrors.email)}
+                value={email}
+                onChangeText={t => {setEmail(t); clearErrors('email');}}
+              />
+              {renderFieldError('email')}
+            </View>
+            <View style={styles.fieldBlock}>
               <TextInput
                 secureTextEntry
-                placeholder="Powtórz hasło"
-                style={[styles.input, !!visibleErrors.confirmPassword && styles.inputError]}
-                value={confirmPassword}
-                onChangeText={t => {setConfirmPassword(t); clearErrors('confirmPassword');}}
+                placeholder="Hasło"
+                placeholderTextColor={authPlaceholderColor}
+                style={authInputStyle(!!visibleErrors.password)}
+                value={password}
+                onChangeText={t => {setPassword(t); clearErrors('password');}}
               />
+              {renderFieldError('password')}
+            </View>
+            {isRegister && (
+              <View style={styles.fieldBlock}>
+                <TextInput
+                  secureTextEntry
+                  placeholder="Powtórz hasło"
+                  placeholderTextColor={authPlaceholderColor}
+                  style={authInputStyle(!!visibleErrors.confirmPassword)}
+                  value={confirmPassword}
+                  onChangeText={t => {setConfirmPassword(t); clearErrors('confirmPassword');}}
+                />
+                {renderFieldError('confirmPassword')}
+              </View>
             )}
 
-            <View style={styles.optionRow}>
-              <Text style={styles.optionTitle}>
+            <View style={[styles.optionRow, {backgroundColor: theme.input}]}>
+              <Text style={[styles.optionTitle, {color: theme.text}]}>
                 {isRegister ? 'Akceptuję regulamin' : 'Pozostań zalogowany'}
               </Text>
               <Switch
@@ -425,11 +481,15 @@ export default function App() {
             <Pressable
               disabled={isPrimaryDisabled}
               onPress={handleSubmit}
-              style={[styles.primaryButton, isPrimaryDisabled && styles.primaryButtonDisabled]}>
+              style={[
+                styles.primaryButton,
+                {backgroundColor: theme.navActive},
+                isPrimaryDisabled && styles.primaryButtonDisabled,
+              ]}>
               {isSubmitting ? (
                 <ActivityIndicator color={isDarkTheme ? '#F7F4EC' : '#FFFFFF'} />
               ) : (
-                <Text style={styles.primaryButtonText}>
+                <Text style={[styles.primaryButtonText, {color: theme.navActiveText}]}>
                   {isRegister ? 'Zarejestruj' : 'Zaloguj'}
                 </Text>
               )}
@@ -440,7 +500,7 @@ export default function App() {
                 clearErrors();
                 setScreen(isRegister ? 'login' : 'register');
               }}>
-              <Text style={styles.footerLink}>
+              <Text style={[styles.footerLink, {color: theme.text}]}>
                 {isRegister ? 'Masz już konto? Zaloguj' : 'Nie masz konta? Załóż je'}
               </Text>
             </Pressable>
