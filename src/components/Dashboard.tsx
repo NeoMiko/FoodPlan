@@ -267,6 +267,26 @@ const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const handleDelete = async (productId: string, productName: string) => {
+    const performDelete = async () => {
+      setDeleteLoading(productId);
+      try {
+        await onDeleteProduct(productId);
+        await onRefresh();
+        setExpandedProductId(null);
+      } catch {
+        Alert.alert('Błąd', 'Nie udało się usunąć produktu.');
+      } finally {
+        setDeleteLoading(null);
+      }
+    };
+
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      if (window.confirm(`Czy na pewno chcesz usunąć "${productName}"?`)) {
+        await performDelete();
+      }
+      return;
+    }
+
     Alert.alert(
       'Usuń produkt',
       `Czy na pewno chcesz usunąć "${productName}"?`,
@@ -275,18 +295,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         {
           text: 'Usuń',
           style: 'destructive',
-          onPress: async () => {
-            setDeleteLoading(productId);
-            try {
-              await onDeleteProduct(productId);
-              await onRefresh();
-              setExpandedProductId(null);
-            } catch {
-              Alert.alert('Błąd', 'Nie udało się usunąć produktu.');
-            } finally {
-              setDeleteLoading(null);
-            }
-          },
+          onPress: performDelete,
         },
       ],
     );

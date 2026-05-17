@@ -67,12 +67,30 @@ function computeDaysLeft(expiryDate: string | null): number | null {
   return Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+function formatDateYmd(dateValue: string | null): string | null {
+  if (!dateValue) return null;
+  const directMatch = dateValue.match(/^\d{4}-\d{2}-\d{2}/);
+  if (directMatch) return directMatch[0];
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return dateValue;
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function processProducts(raw: Product[]): Product[] {
-  return raw.map(p => ({
-    ...p,
-    expiryDate: p.expiry_date ?? null,
-    daysLeft: computeDaysLeft(p.expiry_date ?? null),
-  }));
+  return raw.map(p => {
+    const expiryDate = formatDateYmd(p.expiry_date ?? null);
+    return {
+      ...p,
+      expiry_date: expiryDate,
+      expiryDate,
+      daysLeft: computeDaysLeft(expiryDate),
+    };
+  });
 }
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

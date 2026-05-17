@@ -118,8 +118,9 @@ export async function deleteProduct(
   token: string,
   productId: string,
 ): Promise<{ success: boolean }> {
+  const encodedProductId = encodeURIComponent(productId);
   return fetchApi(
-    '/delete-product',
+    `/delete-product?productId=${encodedProductId}`,
     { method: 'DELETE', body: JSON.stringify({ productId }) },
     token,
   );

@@ -20,7 +20,7 @@ async function handler(event) {
     return createResponse(400, { error: 'Nieprawidlowy format JSON' });
   }
 
-  const { productId } = body;
+  const productId = body.productId || event.queryStringParameters?.productId;
 
   if (!productId) {
     return createResponse(400, { error: 'ID produktu jest wymagane' });
