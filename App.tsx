@@ -444,54 +444,64 @@ export default function App() {
               styles.formPanel,
               {backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1},
             ]}>
-            {isRegister && (
+            <View style={{gap: 14}}>
+              {isRegister && (
+                <View style={styles.fieldBlock}>
+                  <TextInput
+                    placeholder="Imię i nazwisko"
+                    placeholderTextColor={authPlaceholderColor}
+                    style={authInputStyle(!!visibleErrors.name)}
+                    value={name}
+                    onChangeText={t => {setName(t); clearErrors('name');}}
+                  />
+                  {renderFieldError('name')}
+                </View>
+              )}
               <View style={styles.fieldBlock}>
                 <TextInput
-                  placeholder="Imię i nazwisko"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  placeholder="Email"
                   placeholderTextColor={authPlaceholderColor}
-                  style={authInputStyle(!!visibleErrors.name)}
-                  value={name}
-                  onChangeText={t => {setName(t); clearErrors('name');}}
+                  style={authInputStyle(!!visibleErrors.email)}
+                  value={email}
+                  onChangeText={t => {setEmail(t); clearErrors('email');}}
                 />
-                {renderFieldError('name')}
+                {renderFieldError('email')}
               </View>
-            )}
-            <View style={styles.fieldBlock}>
-              <TextInput
-                autoCapitalize="none"
-                keyboardType="email-address"
-                placeholder="Email"
-                placeholderTextColor={authPlaceholderColor}
-                style={authInputStyle(!!visibleErrors.email)}
-                value={email}
-                onChangeText={t => {setEmail(t); clearErrors('email');}}
-              />
-              {renderFieldError('email')}
-            </View>
-            <View style={styles.fieldBlock}>
-              <TextInput
-                secureTextEntry
-                placeholder="Hasło"
-                placeholderTextColor={authPlaceholderColor}
-                style={authInputStyle(!!visibleErrors.password)}
-                value={password}
-                onChangeText={t => {setPassword(t); clearErrors('password');}}
-              />
-              {renderFieldError('password')}
-            </View>
-            {isRegister && (
               <View style={styles.fieldBlock}>
                 <TextInput
                   secureTextEntry
-                  placeholder="Powtórz hasło"
+                  placeholder="Hasło"
                   placeholderTextColor={authPlaceholderColor}
-                  style={authInputStyle(!!visibleErrors.confirmPassword)}
-                  value={confirmPassword}
-                  onChangeText={t => {setConfirmPassword(t); clearErrors('confirmPassword');}}
+                  style={authInputStyle(!!visibleErrors.password)}
+                  value={password}
+                  onChangeText={t => {setPassword(t); clearErrors('password');}}
                 />
-                {renderFieldError('confirmPassword')}
+                {isRegister
+                  ? (fieldErrors.password
+                      ? <Text style={[styles.fieldErrorText, {color: authErrorColor}]}>{fieldErrors.password}</Text>
+                      : !password
+                        ? <Text style={[styles.fieldErrorText, {color: authErrorColor}]}>Hasło jest wymagane.</Text>
+                        : (password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password))
+                          ? <Text style={[styles.fieldErrorText, {color: authErrorColor}]}>Min. 8 znaków · mała i wielka litera · cyfra</Text>
+                          : null)
+                  : renderFieldError('password')}
               </View>
-            )}
+              {isRegister && (
+                <View style={styles.fieldBlock}>
+                  <TextInput
+                    secureTextEntry
+                    placeholder="Powtórz hasło"
+                    placeholderTextColor={authPlaceholderColor}
+                    style={authInputStyle(!!visibleErrors.confirmPassword)}
+                    value={confirmPassword}
+                    onChangeText={t => {setConfirmPassword(t); clearErrors('confirmPassword');}}
+                  />
+                  {renderFieldError('confirmPassword')}
+                </View>
+              )}
+            </View>
 
             <View style={[styles.optionRow, {backgroundColor: theme.input}]}>
               <Text style={[styles.optionTitle, {color: theme.text}]}>
